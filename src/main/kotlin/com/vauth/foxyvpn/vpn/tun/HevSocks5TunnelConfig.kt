@@ -44,7 +44,6 @@ object HevSocks5TunnelConfig {
 
     private fun dohHostName(endpoint: String): String =
         endpoint.substringAfter("://").substringBefore('/')
-
     fun write(
         context: Context,
         socksPort: Int,
@@ -56,6 +55,8 @@ object HevSocks5TunnelConfig {
             addAll(bypassIps)
             add("127.0.0.0/8")
         }.distinct()
+
+        val bootstrapAddress = dohEndpointAddresses.firstOrNull() ?: "1.1.1.1"
 
         val dns = buildJsonObject {
             put(
@@ -71,6 +72,13 @@ object HevSocks5TunnelConfig {
                         )
                     }
                     add(
+                        buildJsonObject {
+                            put("type", "udp")
+                            put("tag", "dns-bootstrap")
+                            put("server", bootstrapAddress)
+                        },
+                    )
+                    add(
                         if (customDnsServer != null) {
                             buildJsonObject {
                                 put("type", "udp")
@@ -82,11 +90,7 @@ object HevSocks5TunnelConfig {
                             buildJsonObject {
                                 put("type", "https")
                                 put("tag", "dns-upstream")
-                                put("server", "https://1.1.1.1/dns-query")
-                                put(
-                                    "server_ip",
-                                    JsonArray((dohEndpointAddresses.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }).map { JsonPrimitive(it) }),
-                                )
+                                put("server", "https://dns.cloudflare.com/dns-query")
                                 put("detour", "tun-socks")
                             }
                         },
@@ -108,7 +112,6 @@ object HevSocks5TunnelConfig {
                 },
             )
             put("final", "dns-upstream")
-            put("independent_cache", true)
         }
 
         val config = buildJsonObject {
@@ -125,7 +128,6 @@ object HevSocks5TunnelConfig {
                         buildJsonObject {
                             put("type", "tun")
                             put("tag", "tun-in")
-                            put("interface_name", "utun")
                             put("address", buildJsonArray { add(JsonPrimitive("$TUN_ADDRESS/24")) })
                             put("mtu", TUN_MTU)
                             put("auto_route", true)
@@ -141,9 +143,8 @@ object HevSocks5TunnelConfig {
                     buildJsonArray {
                         add(
                             buildJsonObject {
-                                put("action", "route")
+                                put("action", "hijack-dns")
                                 put("protocol", buildJsonArray { add(JsonPrimitive("dns")) })
-                                put("outbound", "dns-out")
                             },
                         )
                         add(
@@ -159,6 +160,7 @@ object HevSocks5TunnelConfig {
                     },
                 )
                 put("final", "tun-socks")
+                put("default_domain_resolver", "dns-bootstrap")
                 put("auto_detect_interface", true)
             }
             putJsonObject("experimental") {
@@ -183,12 +185,6 @@ object HevSocks5TunnelConfig {
                         buildJsonObject {
                             put("type", "direct")
                             put("tag", "direct-bypass")
-                        },
-                    )
-                    add(
-                        buildJsonObject {
-                            put("type", "dns")
-                            put("tag", "dns-out")
                         },
                     )
                 },

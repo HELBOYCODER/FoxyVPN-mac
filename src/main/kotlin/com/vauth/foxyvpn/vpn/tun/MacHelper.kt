@@ -6,22 +6,29 @@ import java.io.File
 import java.util.UUID
 
 private const val TAG = "MacHelper"
+private const val DAEMON_LABEL = "com.vauth.foxyvpn.helper"
 
 /**
- * A small root-owned helper loop (started once per session via an admin prompt) that
- * applies system-wide networking changes the app itself is not entitled to do:
+ * A root-owned helper (installed as a LaunchDaemon after one admin prompt) that applies
+ * system-wide networking changes the app itself is not entitled to do:
  * - start/stop the sing-box TUN tunnel,
  * - host routes that keep FoxyVPN's own control-plane traffic out of the tunnel,
  * - the macOS SOCKS system proxy.
+ *
+ * A plain `do shell script ... &` child is killed when the authorization session ends,
+ * so the watcher must live under launchd to survive.
  */
 object MacHelper {
+
+    private const val DAEMON_PLIST_PATH = "/Library/LaunchDaemons/$DAEMON_LABEL.plist"
 
     private val dir: File get() = FoxyPaths.helperDir
     private val cmdFile get() = File(dir, "cmd")
     private val doneFile get() = File(dir, "cmd.done")
     private val stopFile get() = File(dir, "stop")
-    private val scriptFile get() = File(dir, "helper.sh")
-    private val watcherPidFile get() = File(dir, "watcher.pid")
+    private val startedFile get() = File(dir, "watcher.started")
+    private val scriptFile get() = File(dir, "foxy-helper.sh")
+    private val plistStagingFile get() = File(dir, "foxy-helper.plist")
     private val configPathFile get() = File(dir, "current_config")
     private val bypassFile get() = File(dir, "bypass_ips")
     private val proxyPortFile get() = File(dir, "proxy_port")
@@ -29,12 +36,28 @@ object MacHelper {
     @Volatile
     private var promptedForAdmin = false
 
+    @Volatile
+    private var shuttingDown = false
+
     private fun commandNonce(): String = UUID.randomUUID().toString()
 
     private fun watcherAlive(): Boolean {
-        val pid = watcherPidFile.takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull() ?: return false
-        return ProcessHandle.of(pid).map { it.isAlive }.orElse(false)
+        // A user process cannot read the command line of root processes on macOS, so ask
+        // launchd directly whether the helper job is running.
+        val printOut = runCatching {
+            ProcessBuilder("launchctl", "print", "system/$DAEMON_LABEL")
+                .redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+        }.getOrDefault("")
+        if ("state = running" in printOut) return true
+        return ProcessHandle.allProcesses()
+            .anyMatch { h -> h.info().commandLine().orElse("").contains("foxy-helper.sh") }
     }
+
+    private fun staleWatcherRunning(): Boolean = ProcessHandle.allProcesses()
+        .anyMatch { h ->
+            val line = h.info().commandLine().orElse("")
+            line.contains("/helper.sh") && !line.contains("foxy-helper.sh")
+        }
 
     private fun writeScript() {
         val singBox = FoxyPaths.bundledResource("sing-box")?.absolutePath ?: ""
@@ -42,6 +65,7 @@ object MacHelper {
             """
             #!/bin/sh
             # FoxyVPN privileged helper - generated, do not edit.
+            PATH="/usr/bin:/bin:/usr/sbin:/sbin"; export PATH
             DIR="${dir.absolutePath}"
             SINGBOX="$singBox"
 
@@ -79,12 +103,12 @@ object MacHelper {
                   sleep 1
                   apply_bypass
                   if [ -n "${'$'}CONFIG" ] && [ -x "${'$'}SINGBOX" ]; then
-                    nohup "${'$'}SINGBOX" run -c "${'$'}CONFIG" >> "${'$'}DIR/singbox.log" 2>&1 &
+                    "${'$'}SINGBOX" run -c "${'$'}CONFIG" >> "${'$'}DIR/singbox.log" 2>&1 &
                     echo ${'$'}! > "${'$'}DIR/singbox.pid"
                     sleep 2
                     if ! route -n get default 2>/dev/null | grep -q utun; then
                       UTUN=`grep -o 'utun[0-9]*' "${'$'}DIR/singbox.log" 2>/dev/null | tail -1`
-                      [ -n "${'$'}UTUN" ] && route -n add -default -interface "${'$'}UTUN" >/dev/null 2>&1
+                      [ -n "${'$'}UTUN" ] && route -n add default -interface "${'$'}UTUN" >/dev/null 2>&1
                     fi
                   fi
                   ;;
@@ -92,8 +116,8 @@ object MacHelper {
                   [ -f "${'$'}DIR/singbox.pid" ] && kill `cat "${'$'}DIR/singbox.pid"` 2>/dev/null
                   rm -f "${'$'}DIR/singbox.pid"
                   if ! route -n get default 2>/dev/null | grep -q utun; then
-                    for u in utun0 utun1 utun2 utun3 utun4; do
-                      route -n delete -default -interface ${'$'}u >/dev/null 2>&1
+                    for u in utun0 utun1 utun2 utun3 utun4 utun5 utun6; do
+                      route -n delete default -interface ${'$'}u >/dev/null 2>&1
                     done
                   fi
                   remove_bypass
@@ -112,31 +136,79 @@ object MacHelper {
               esac
             }
 
+            uninstall() {
+              handle stop_tun
+              handle stop_proxy
+              rm -f "${'$'}DIR/cmd" "${'$'}DIR/cmd.done" "${'$'}DIR/stop" "${'$'}DIR/watcher.started"
+              launchctl bootout system/$DAEMON_LABEL 2>/dev/null
+              rm -f "$DAEMON_PLIST_PATH"
+              exit 0
+            }
+
+            [ -f "${'$'}DIR/stop" ] && uninstall
             touch "${'$'}DIR/watcher.started"
             while :; do
-              [ -f "${'$'}DIR/stop" ] && break
+              [ -f "${'$'}DIR/stop" ] && uninstall
               if [ -f "${'$'}DIR/cmd" ] && [ ! -f "${'$'}DIR/cmd.done" ]; then
-                nonce=`cat "${'$'}DIR/cmd" | head -1`
-                action=`cat "${'$'}DIR/cmd" | sed -n 2p`
+                nonce=`head -1 "${'$'}DIR/cmd"`
+                action=`sed -n 2p "${'$'}DIR/cmd"`
                 handle "${'$'}action"
                 echo "${'$'}nonce" > "${'$'}DIR/cmd.done"
               fi
               sleep 0.3
             done
-            handle stop_tun
-            handle stop_proxy
-            rm -f "${'$'}DIR/cmd" "${'$'}DIR/cmd.done" "${'$'}DIR/stop" "${'$'}DIR/watcher.pid" "${'$'}DIR/watcher.started"
             """.trimIndent() + "\n",
         )
         scriptFile.setReadable(true, false)
     }
 
+    private fun writePlist() {
+        plistStagingFile.writeText(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+              <key>Label</key><string>$DAEMON_LABEL</string>
+              <key>ProgramArguments</key>
+              <array><string>/bin/sh</string><string>${scriptFile.absolutePath}</string></array>
+              <key>RunAtLoad</key><true/>
+              <key>KeepAlive</key><true/>
+              <key>StandardOutPath</key><string>${File(dir, "launchd.out").absolutePath}</string>
+              <key>StandardErrorPath</key><string>${File(dir, "launchd.err").absolutePath}</string>
+            </dict>
+            </plist>
+            """.trimIndent() + "\n",
+        )
+    }
+
+    private fun stopStaleWatchers() {
+        if (!staleWatcherRunning()) return
+        runCatching { stopFile.createNewFile() }
+        val deadline = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < deadline && staleWatcherRunning()) {
+            Thread.sleep(300)
+        }
+    }
+
     private fun ensureWatcher(): Boolean {
         if (watcherAlive()) return true
         promptedForAdmin = true
+        stopStaleWatchers()
+        if (watcherAlive()) return true
+
         writeScript()
+        writePlist()
+        runCatching { stopFile.delete() }
+        runCatching { startedFile.delete() }
+
+        val installCommand =
+            "cp '${plistStagingFile.absolutePath}' '$DAEMON_PLIST_PATH' && " +
+                "chown root:wheel '$DAEMON_PLIST_PATH' && chmod 644 '$DAEMON_PLIST_PATH' && " +
+                "launchctl bootout system/$DAEMON_LABEL 2>/dev/null; " +
+                "launchctl bootstrap system '$DAEMON_PLIST_PATH'"
         val promptScript =
-            "do shell script \"nohup /bin/sh '${scriptFile.absolutePath}' >/dev/null 2>&1 & echo \\$! > '${watcherPidFile.absolutePath}'\" " +
+            "do shell script \"$installCommand\" " +
                 "with prompt \"FoxyVPN needs administrator access to create the VPN tunnel and proxy routes.\" " +
                 "with administrator privileges"
         val result = runCatching {
@@ -150,15 +222,20 @@ object MacHelper {
             AppLogger.w(TAG, "the administrator prompt was declined or failed; system-wide modes are unavailable")
             return false
         }
-        val deadline = System.currentTimeMillis() + 10_000
+        val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline) {
-            if (File(dir, "watcher.started").exists() && watcherAlive()) return true
-            Thread.sleep(200)
+            if (startedFile.exists() && watcherAlive()) {
+                AppLogger.i(TAG, "the privileged helper (LaunchDaemon) is up and running")
+                return true
+            }
+            Thread.sleep(250)
         }
+        AppLogger.w(TAG, "the privileged helper did not come up; check ${File(dir, "launchd.err").absolutePath}")
         return watcherAlive()
     }
 
     private fun sendCommand(action: String, timeoutMs: Long = 45_000): Boolean {
+        if (shuttingDown) return false
         dir.mkdirs()
         if (!ensureWatcher()) return false
         runCatching { doneFile.delete() }
@@ -193,7 +270,13 @@ object MacHelper {
 
     fun stopSystemProxy(): Boolean = sendCommand("stop_proxy")
 
+    /** Stops the tunnel, removes the daemon and cleans up. Safe to call when nothing runs. */
     fun shutdown() {
+        shuttingDown = true
         runCatching { stopFile.createNewFile() }
+        val deadline = System.currentTimeMillis() + 6_000
+        while (System.currentTimeMillis() < deadline && watcherAlive()) {
+            Thread.sleep(250)
+        }
     }
 }

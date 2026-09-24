@@ -47,6 +47,14 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
+tasks.register<JavaExec>("runHelperTest") {
+    group = "verification"
+    description = "Drives the privileged TUN helper end-to-end without the UI"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "com.vauth.foxyvpn.tools.HelperTestKt"
+    (project.findProperty("helperArgs") as? String)?.let { argumentProviders.add { listOf(it) } }
+}
+
 compose.desktop {
     application {
         mainClass = "com.vauth.foxyvpn.MainKt"

@@ -47,14 +47,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
-tasks.register<JavaExec>("runHelperTest") {
-    group = "verification"
-    description = "Drives the privileged TUN helper end-to-end without the UI"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass = "com.vauth.foxyvpn.tools.HelperTestKt"
-    (project.findProperty("helperArgs") as? String)?.let { argumentProviders.add { listOf(it) } }
-}
-
 compose.desktop {
     application {
         mainClass = "com.vauth.foxyvpn.MainKt"
@@ -65,23 +57,11 @@ compose.desktop {
             packageVersion = "1.0.4"
             vendor = "vauth"
             description = "Unofficial Firefox VPN client for macOS"
-            appResourcesRootDir = project.layout.projectDirectory.dir("app-resources")
-
-            macOS {
+                macOS {
                 bundleID = "com.vauth.foxyvpn.mac"
                 minimumSystemVersion = "11.0"
                 dockName = "FoxyVPN"
             }
         }
     }
-}
-
-tasks.matching { it.name == "prepareAppResources" || it.name.startsWith("package") || it.name.startsWith("createRuntimeImage") }.configureEach {
-    dependsOn("syncAppResources")
-}
-
-tasks.register<Copy>("syncAppResources") {
-    from("vendor")
-    into("app-resources/macos")
-    filePermissions { unix("755") }
 }

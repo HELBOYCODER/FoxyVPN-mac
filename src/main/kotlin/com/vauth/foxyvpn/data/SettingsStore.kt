@@ -78,15 +78,14 @@ class SettingsStore(context: Context) {
     enum class MacTrafficMode {
         LOCAL_PROXY,
         SYSTEM_PROXY,
-        GLOBAL_TUN,
     }
 
     var macTrafficMode: MacTrafficMode
         get() {
-            prefs.getString(KEY_MAC_TRAFFIC_MODE, null)
+            val stored = prefs.getString(KEY_MAC_TRAFFIC_MODE, null)
                 ?.let { name -> MacTrafficMode.entries.firstOrNull { it.name == name } }
-                ?.let { return it }
-            return if (prefs.getBoolean(KEY_PROXY_ONLY_MODE, false)) {
+            // GLOBAL_TUN was removed; anything unknown falls back to the system proxy.
+            return stored ?: if (prefs.getBoolean(KEY_PROXY_ONLY_MODE, false)) {
                 MacTrafficMode.LOCAL_PROXY
             } else {
                 MacTrafficMode.SYSTEM_PROXY

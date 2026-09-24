@@ -2,7 +2,6 @@ package com.vauth.foxyvpn.vpn.socks
 
 import com.vauth.foxyvpn.data.AppLogger
 import com.vauth.foxyvpn.vpn.RelayDispatchers
-import com.vauth.foxyvpn.vpn.tun.HevSocks5TunnelConfig
 import com.vauth.foxyvpn.vpn.upstream.UpstreamConnectRejectedException
 import com.vauth.foxyvpn.vpn.upstream.UpstreamConnectTimeoutException
 import com.vauth.foxyvpn.vpn.upstream.UpstreamHealthTracker
@@ -324,17 +323,6 @@ class LocalSocks5Server(
         val targetPort = target.port
         val targetKey = "$targetHost:$targetPort"
 
-        if (rejectFakeDnsAddresses && HevSocks5TunnelConfig.isFakeDnsAddress(targetHost)) {
-            staleFakeIpRejections.incrementAndGet()
-            AppLogger.d(
-                TAG,
-                "refusing $targetKey: synthetic DNS address with no live hostname mapping " +
-                    "(stale cached DNS answer from before the tunnel restarted)",
-            )
-            output.write(socksReply(0x04)) 
-            output.flush()
-            return
-        }
 
         val literal = target.literal
         if (literal != null && literal.isLocalNetworkDestination()) {

@@ -9,14 +9,9 @@ private const val TAG = "MacHelper"
 private const val DAEMON_LABEL = "com.vauth.foxyvpn.helper"
 
 /**
- * A root-owned helper (installed as a LaunchDaemon after one admin prompt) that applies
- * system-wide networking changes the app itself is not entitled to do:
- * - start/stop the sing-box TUN tunnel,
- * - host routes that keep FoxyVPN's own control-plane traffic out of the tunnel,
- * - the macOS SOCKS system proxy.
- *
- * A plain `do shell script ... &` child is killed when the authorization session ends,
- * so the watcher must live under launchd to survive.
+ * A root-owned helper (installed as a LaunchDaemon after one admin prompt) that toggles
+ * the macOS SOCKS system proxy. The daemon stays installed across app restarts and
+ * reinstalls, so the administrator approval is given once.
  */
 object MacHelper {
 
@@ -29,8 +24,6 @@ object MacHelper {
     private val startedFile get() = File(dir, "watcher.started")
     private val scriptFile get() = File(dir, "foxy-helper.sh")
     private val plistStagingFile get() = File(dir, "foxy-helper.plist")
-    private val configPathFile get() = File(dir, "current_config")
-    private val bypassFile get() = File(dir, "bypass_ips")
     private val proxyPortFile get() = File(dir, "proxy_port")
 
     @Volatile
@@ -42,8 +35,6 @@ object MacHelper {
     private fun commandNonce(): String = UUID.randomUUID().toString()
 
     private fun watcherAlive(): Boolean {
-        // A user process cannot read the command line of root processes on macOS, so ask
-        // launchd directly whether the helper job is running.
         val printOut = runCatching {
             ProcessBuilder("launchctl", "print", "system/$DAEMON_LABEL")
                 .redirectErrorStream(true).start().inputStream.bufferedReader().readText()
@@ -53,75 +44,29 @@ object MacHelper {
             .anyMatch { h -> h.info().commandLine().orElse("").contains("foxy-helper.sh") }
     }
 
-    private fun staleWatcherRunning(): Boolean = ProcessHandle.allProcesses()
-        .anyMatch { h ->
-            val line = h.info().commandLine().orElse("")
-            line.contains("/helper.sh") && !line.contains("foxy-helper.sh")
-        }
-
-    private fun writeScript() {
-        val singBox = FoxyPaths.bundledResource("sing-box")?.absolutePath ?: ""
-        scriptFile.writeText(
-            """
+    private fun writeScript(): Boolean {
+        val desired = """
             #!/bin/sh
             # FoxyVPN privileged helper - generated, do not edit.
             PATH="/usr/bin:/bin:/usr/sbin:/sbin"; export PATH
             DIR="${dir.absolutePath}"
-            SINGBOX="$singBox"
 
             active_service() {
-              IF=`route -n get default 2>/dev/null | awk '/interface:/{print ${'$'}2}'`
-              [ -z "${'$'}IF" ] && return
-              networksetup -listnetworkserviceorder | awk -v ifc="${'$'}IF" '
+              GW=""
+              PIF=""
+              for i in en0 en1 en2 en3 en4 en5; do
+                R=`ipconfig getrouter ${'$'}i 2>/dev/null`
+                if [ -n "${'$'}R" ]; then GW="${'$'}R"; PIF="${'$'}i"; break; fi
+              done
+              [ -z "${'$'}PIF" ] && return
+              networksetup -listnetworkserviceorder | awk -v ifc="${'$'}PIF" '
                 /^\([0-9]+\)/ { name=${'$'}0; sub(/^[^)]*\) */, "", name) }
                 index(${'$'}0, "Device: " ifc) > 0 { print name; exit }
               '
             }
 
-            apply_bypass() {
-              GW=`route -n get default 2>/dev/null | awk '/gateway:/{print ${'$'}2}'`
-              [ -z "${'$'}GW" ] && return
-              while read -r ip; do
-                [ -z "${'$'}ip" ] && continue
-                route -n add -host "${'$'}ip" "${'$'}GW" >/dev/null 2>&1
-              done < "${'$'}DIR/bypass_ips"
-            }
-
-            remove_bypass() {
-              [ -f "${'$'}DIR/bypass_ips" ] || return
-              while read -r ip; do
-                [ -z "${'$'}ip" ] && continue
-                route -n delete -host "${'$'}ip" >/dev/null 2>&1
-              done < "${'$'}DIR/bypass_ips"
-            }
-
             handle() {
               case "${'$'}1" in
-                start_tun)
-                  CONFIG=`cat "${'$'}DIR/current_config" 2>/dev/null`
-                  [ -f "${'$'}DIR/singbox.pid" ] && kill `cat "${'$'}DIR/singbox.pid"` 2>/dev/null
-                  sleep 1
-                  apply_bypass
-                  if [ -n "${'$'}CONFIG" ] && [ -x "${'$'}SINGBOX" ]; then
-                    "${'$'}SINGBOX" run -c "${'$'}CONFIG" >> "${'$'}DIR/singbox.log" 2>&1 &
-                    echo ${'$'}! > "${'$'}DIR/singbox.pid"
-                    sleep 2
-                    if ! route -n get default 2>/dev/null | grep -q utun; then
-                      UTUN=`grep -o 'utun[0-9]*' "${'$'}DIR/singbox.log" 2>/dev/null | tail -1`
-                      [ -n "${'$'}UTUN" ] && route -n add default -interface "${'$'}UTUN" >/dev/null 2>&1
-                    fi
-                  fi
-                  ;;
-                stop_tun)
-                  [ -f "${'$'}DIR/singbox.pid" ] && kill `cat "${'$'}DIR/singbox.pid"` 2>/dev/null
-                  rm -f "${'$'}DIR/singbox.pid"
-                  if ! route -n get default 2>/dev/null | grep -q utun; then
-                    for u in utun0 utun1 utun2 utun3 utun4 utun5 utun6; do
-                      route -n delete default -interface ${'$'}u >/dev/null 2>&1
-                    done
-                  fi
-                  remove_bypass
-                  ;;
                 start_proxy)
                   SVC=`active_service`
                   PORT=`cat "${'$'}DIR/proxy_port" 2>/dev/null`
@@ -137,9 +82,8 @@ object MacHelper {
             }
 
             uninstall() {
-              handle stop_tun
               handle stop_proxy
-              rm -f "${'$'}DIR/cmd" "${'$'}DIR/cmd.done" "${'$'}DIR/stop" "${'$'}DIR/watcher.started"
+              rm -f "${'$'}DIR/cmd" "${'$'}DIR/cmd.done" "${'$'}DIR/stop" "${'$'}DIR/watcher.started" "${'$'}DIR/heartbeat"
               launchctl bootout system/$DAEMON_LABEL 2>/dev/null
               rm -f "$DAEMON_PLIST_PATH"
               exit 0
@@ -157,9 +101,12 @@ object MacHelper {
               fi
               sleep 0.3
             done
-            """.trimIndent() + "\n",
-        )
+            """.trimIndent() + "\n"
+        val previous = scriptFile.takeIf { it.exists() }?.readText()
+        if (previous == desired) return false
+        scriptFile.writeText(desired)
         scriptFile.setReadable(true, false)
+        return true
     }
 
     private fun writePlist() {
@@ -182,21 +129,7 @@ object MacHelper {
         )
     }
 
-    private fun stopStaleWatchers() {
-        if (!staleWatcherRunning()) return
-        runCatching { stopFile.createNewFile() }
-        val deadline = System.currentTimeMillis() + 8_000
-        while (System.currentTimeMillis() < deadline && staleWatcherRunning()) {
-            Thread.sleep(300)
-        }
-    }
-
-    private fun ensureWatcher(): Boolean {
-        if (watcherAlive()) return true
-        promptedForAdmin = true
-        stopStaleWatchers()
-        if (watcherAlive()) return true
-
+    private fun startDaemon(): Boolean {
         writeScript()
         writePlist()
         runCatching { stopFile.delete() }
@@ -209,7 +142,7 @@ object MacHelper {
                 "launchctl bootstrap system '$DAEMON_PLIST_PATH'"
         val promptScript =
             "do shell script \"$installCommand\" " +
-                "with prompt \"FoxyVPN needs administrator access to create the VPN tunnel and proxy routes.\" " +
+                "with prompt \"FoxyVPN needs administrator access once to manage the system proxy. This is the last time it will ask.\" " +
                 "with administrator privileges"
         val result = runCatching {
             ProcessBuilder("osascript", "-e", promptScript)
@@ -219,7 +152,7 @@ object MacHelper {
                 .waitFor()
         }
         if (result.getOrDefault(1) != 0) {
-            AppLogger.w(TAG, "the administrator prompt was declined or failed; system-wide modes are unavailable")
+            AppLogger.w(TAG, "the administrator prompt was declined or failed; the system proxy is unavailable")
             return false
         }
         val deadline = System.currentTimeMillis() + 15_000
@@ -230,11 +163,27 @@ object MacHelper {
             }
             Thread.sleep(250)
         }
-        AppLogger.w(TAG, "the privileged helper did not come up; check ${File(dir, "launchd.err").absolutePath}")
         return watcherAlive()
     }
 
-    private fun sendCommand(action: String, timeoutMs: Long = 45_000): Boolean {
+    private fun ensureWatcher(): Boolean {
+        if (shuttingDown) return false
+        val scriptChanged = writeScript()
+        if (watcherAlive()) {
+            if (!scriptChanged) return true
+            AppLogger.i(TAG, "the helper script was updated; restarting the privileged helper")
+            runCatching { stopFile.createNewFile() }
+            val stopDeadline = System.currentTimeMillis() + 10_000
+            while (System.currentTimeMillis() < stopDeadline && watcherAlive()) {
+                Thread.sleep(300)
+            }
+            return startDaemon()
+        }
+        promptedForAdmin = true
+        return startDaemon()
+    }
+
+    private fun sendCommand(action: String, timeoutMs: Long = 30_000): Boolean {
         if (shuttingDown) return false
         dir.mkdirs()
         if (!ensureWatcher()) return false
@@ -255,14 +204,6 @@ object MacHelper {
 
     val isAdminAvailable: Boolean get() = watcherAlive() || !promptedForAdmin
 
-    fun startTun(configPath: String, bypassIps: List<String>): Boolean {
-        configPathFile.writeText(configPath)
-        bypassFile.writeText(bypassIps.joinToString("\n") + "\n")
-        return sendCommand("start_tun")
-    }
-
-    fun stopTun(): Boolean = sendCommand("stop_tun")
-
     fun startSystemProxy(port: Int): Boolean {
         proxyPortFile.writeText(port.toString())
         return sendCommand("start_proxy")
@@ -270,13 +211,14 @@ object MacHelper {
 
     fun stopSystemProxy(): Boolean = sendCommand("stop_proxy")
 
-    /** Stops the tunnel, removes the daemon and cleans up. Safe to call when nothing runs. */
-    fun shutdown() {
-        shuttingDown = true
-        runCatching { stopFile.createNewFile() }
-        val deadline = System.currentTimeMillis() + 6_000
-        while (System.currentTimeMillis() < deadline && watcherAlive()) {
-            Thread.sleep(250)
+    /**
+     * App quit path: clear the system proxy but keep the LaunchDaemon installed, so the
+     * administrator approval is given once and survives app restarts and reinstalls.
+     */
+    fun releaseSystem() {
+        if (watcherAlive()) {
+            runCatching { stopSystemProxy() }
         }
+        shuttingDown = true
     }
 }

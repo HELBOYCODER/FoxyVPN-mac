@@ -36,7 +36,11 @@ fun main() {
         val windowState = rememberWindowState(width = 460.dp, height = 880.dp)
         Window(
             onCloseRequest = {
-                MacHelper.shutdown()
+                if (FoxyVpnService.state.value != com.vauth.foxyvpn.data.model.ConnectionState.DISCONNECTED) {
+                    FoxyVpnService.stop(app)
+                    Thread.sleep(1_500)
+                }
+                MacHelper.releaseSystem()
                 exitApplication()
             },
             title = "FoxyVPN",

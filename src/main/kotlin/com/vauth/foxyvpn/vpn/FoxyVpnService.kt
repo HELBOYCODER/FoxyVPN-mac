@@ -20,8 +20,6 @@ import com.vauth.foxyvpn.data.model.ProxyCandidate
 import com.vauth.foxyvpn.data.model.RuntimeAuth
 import com.vauth.foxyvpn.platform.AppHolder
 import com.vauth.foxyvpn.vpn.socks.LocalSocks5Server
-import com.vauth.foxyvpn.vpn.tun.HevSocks5Tunnel
-import com.vauth.foxyvpn.vpn.tun.HevSocks5TunnelConfig
 import com.vauth.foxyvpn.vpn.tun.MacHelper
 import com.vauth.foxyvpn.vpn.upstream.EdgeAddressResolver
 import com.vauth.foxyvpn.vpn.upstream.UpstreamProxyConfig
@@ -37,9 +35,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.net.InetAddress
 
 private const val TAG = "FoxyVpnService"
 private const val CONNECT_TIMEOUT_MS = 20_000L
@@ -67,8 +63,6 @@ private const val PROXY_PASS_RENEWAL_CEILING_MS = 30 * 60_000L
 private const val PROXY_PASS_RENEWAL_FALLBACK_MS = 4 * 60_000L
 
 private const val PROXY_PASS_RENEWAL_RETRY_MS = 30_000L
-
-private const val POST_TUN_SETTLE_MS = 500L
 
 private const val INITIAL_DIAL_SETTLE_MS = 600L
 
@@ -114,7 +108,6 @@ object FoxyVpnService {
     private var speedJob: Job? = null
     private var tokenRenewalJob: Job? = null
 
-    @Volatile private var tunActive = false
     @Volatile private var systemProxyActive = false
 
     @Volatile private var lastUnhealthyRedialAt = 0L
@@ -242,14 +235,6 @@ object FoxyVpnService {
             return null
         }
         return attempt.getOrNull()
-    }
-
-    private suspend fun resolveIpsFor(hosts: List<String>): List<String> = withContext(Dispatchers.IO) {
-        hosts.filter { it.isNotBlank() }.flatMap { host ->
-            runCatching {
-                InetAddress.getAllByName(host).map { it.hostAddress.substringBefore('%') }
-            }.getOrDefault(emptyList())
-        }.distinct()
     }
 
     private suspend fun startProxyPassRenewal(
@@ -404,37 +389,20 @@ object FoxyVpnService {
             val socksPort = settingsStore.socksPort
             val socksBindAddress = settingsStore.socksBindAddress
             var trafficMode = settingsStore.macTrafficMode
-            val customDnsServer = settingsStore.effectiveCustomDnsServer
-
-            // In TUN mode the whole machine's traffic (including our own control-plane and
-            // upstream sockets) would be captured by the tunnel, so every host we dial must
-            // have an explicit bypass route; pre-collect the alternates for the same reason.
-            if (trafficMode == SettingsStore.MacTrafficMode.GLOBAL_TUN) {
-                alternatesDiscovered = true
-                val fresh = discoverAlternateCandidates(primaryCandidate)
-                    .filter { discovered -> candidates.none { known -> known.authority == discovered.authority } }
-                    .take(MAX_ALTERNATE_EDGES)
-                if (fresh.isNotEmpty()) candidates = candidates + fresh
-            }
 
             fun connectedLabel(): String = when (trafficMode) {
                 SettingsStore.MacTrafficMode.LOCAL_PROXY ->
                     "Proxy active \u2022 $socksBindAddress:$socksPort"
                 SettingsStore.MacTrafficMode.SYSTEM_PROXY ->
                     "System proxy active \u2022 $socksBindAddress:$socksPort"
-                SettingsStore.MacTrafficMode.GLOBAL_TUN -> {
-                    val target = activeCandidate()
-                    "Connected \u2022 ${target.countryName.ifBlank { target.countryCode }}"
-                }
             }
 
             ControlPlaneHttp.socketProtector = null
 
-            val mapdnsActive = trafficMode == SettingsStore.MacTrafficMode.GLOBAL_TUN && customDnsServer == null
             val socks = LocalSocks5Server(
                 socksBindAddress,
                 socksPort,
-                mapdnsActive,
+                false,
                 { upstreamSession },
             ) {
                 onUpstreamSessionUnhealthy()
@@ -443,7 +411,7 @@ object FoxyVpnService {
             socksServer = socks
             ensureGenerationCurrent(myGeneration)
 
-            suspend fun bringUpSystemTunnel(): Unit = when (trafficMode) {
+            fun bringUpSystemTunnel(): Unit = when (trafficMode) {
                 SettingsStore.MacTrafficMode.LOCAL_PROXY -> {
                     AppLogger.i(
                         TAG,
@@ -464,42 +432,6 @@ object FoxyVpnService {
                         _lastError.value =
                             "System proxy needs administrator access. Running local-proxy only " +
                             "($socksBindAddress:$socksPort)."
-                    }
-                }
-                SettingsStore.MacTrafficMode.GLOBAL_TUN -> {
-                    val bypassHosts = buildList {
-                        addAll(candidates.map { it.host })
-                        add("vpn.mozilla.org")
-                        add("firefox.settings.services.mozilla.com")
-                        add("api.accounts.firefox.com")
-                        add("accounts.firefox.com")
-                        add("identity.mozilla.com")
-                        add("www.cloudflare.com")
-                        addAll(settingsStore.dohProvider.addresses.map { it })
-                        addAll(dohEndpointAddresses)
-                        customDnsServer?.let { add(it) }
-                    }
-                    val bypassIps = resolveIpsFor(bypassHosts) + dohEndpointAddresses
-                    val configPath = HevSocks5TunnelConfig.write(
-                        application,
-                        socksPort,
-                        customDnsServer,
-                        dohEndpointAddresses,
-                        bypassIps,
-                    )
-                    if (HevSocks5Tunnel.start(configPath, bypassIps = bypassIps)) {
-                        tunActive = true
-                        AppLogger.i(TAG, "connect: TUN interface up, sing-box tun2socks started")
-                        delay(POST_TUN_SETTLE_MS)
-                    } else {
-                        AppLogger.w(
-                            TAG,
-                            "the TUN backend is unavailable (administrator access declined or sing-box missing); " +
-                                "falling back to system proxy mode",
-                        )
-                        tunActive = false
-                        trafficMode = SettingsStore.MacTrafficMode.SYSTEM_PROXY
-                        bringUpSystemTunnel()
                     }
                 }
             }
@@ -799,11 +731,6 @@ object FoxyVpnService {
     private fun releaseResources(resources: SessionResources, stopSystemTunnel: Boolean) {
         if (resources.isEmpty && !stopSystemTunnel) return
         if (stopSystemTunnel) {
-            if (tunActive) {
-                runCatching { HevSocks5Tunnel.stop() }
-                    .onFailure { AppLogger.w(TAG, "error stopping tun2socks tunnel", it) }
-                tunActive = false
-            }
             if (systemProxyActive) {
                 runCatching { MacHelper.stopSystemProxy() }
                     .onFailure { AppLogger.w(TAG, "error clearing the system proxy", it) }

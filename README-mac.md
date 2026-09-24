@@ -14,15 +14,11 @@
    - راست‌کلیک روی اپ → **Open** → دوباره **Open**
    - یا در ترمینال: `xattr -dr com.apple.quarantine /Applications/FoxyVPN.app`
 
-## سه حالت ترافیک (Settings → Traffic capture)
-| حالت | توضیح | دسترسی admin |
-|---|---|---|
-| **Proxy-only mode** | فقط SOCKS5 لوکال روی `127.0.0.1:1080`؛ اپ‌هایی مثل Telegram/Firefox را دستی به آن وصل کنید | لازم ندارد |
-| **System proxy** | تنظیم سیستم‌پروکسی مک (مرورگرها و اکثر اپ‌ها رد می‌شوند؛ UDP شامل نمی‌شود) | یک بار پرامپت |
-| **Full tunnel** | مثل حالت VPN اندروید: کل ترافیک IPv4/IPv6 از TUN عبور می‌کند (motored by sing-box + fake-DNS مثل mapdns اندروید) | یک بار پرامپت |
+## حالت‌های ترافیک
+- **Proxy-only** (سوئیچ در Settings): فقط SOCKS5 لوکال روی `127.0.0.1:1080`؛ اپ‌هایی مثل Telegram/Firefox را دستی به آن وصل کنید. بدون هیچ دسترسی.
+- **System proxy** (پیش‌فرض): تنظیم سیستم‌پروکسی مک با هلپر root. یک بار پرامپت admin کافی است؛ هلپر به‌صورت LaunchDaemon نصب می‌ماند و با بستن/بازکردن یا نصب مجدد اپ دیگر نمی‌پرسد.
 
-حالت پیش‌فرض **System proxy** است. اگر پرامپت admin رد شود، اپ خودکار به حالت بعدی ساده‌تر
-برمی‌گردد و پیامش را در صفحهٔ اصلی نشان می‌دهد.
+> حالت Full Tunnel (TUN/sing-box) در این نسخه حذف شده است؛ مدل ترافیک همان نسخهٔ اول است.
 
 ## داده‌ها و لاگ‌ها
 - تنظیمات/توکن‌ها (مقدارها AES-GCM رمزنگاری می‌شوند): `~/Library/Application Support/FoxyVPN/`
@@ -42,14 +38,11 @@ cd foxyvpn-mac
 JAVA_HOME=<jdk-17> gradle packageDistributionForCurrentOS
 # خروجی: build/compose/binaries/main/dmg/FoxyVPN-1.0.4.dmg
 ```
-پیش‌نیازها: JDK 17 (Temurin) و Gradle 8.10؛ باینری sing-box 1.14.2 در `vendor/sing-box` قرار دارد و
-خودکار داخل اپ بسته‌بندی می‌شود.
+پیش‌نیازها: JDK 17 (Temurin) و Gradle 8.10.
 
 ## معماری پورت
 - `src/main/kotlin/compat/` — لایهٔ سازگاری مینیمال با نام پکیج‌های اندروید
   (`android.content.Context`, `SharedPreferences`, `Toast`, `Base64`, `EncryptedSharedPreferences`,
   `LocalContext`, `PackageManager` و…) تا سورس UI/اسکرین‌ها بدون تغییر باینری بماند.
 - `vpn/FoxyVpnService.kt` — همان ماشین‌حالت اتصال/watchdog/proxy-pass renewal، بدون Notification/WakeLock.
-- `vpn/tun/MacHelper.kt` — هلپر root (از طریق پرامپت `osascript`) برای routeها، سیستم‌پروکسی و sing-box.
-- `vpn/tun/HevSocks5TunnelConfig.kt` — مولد کانفیگ sing-box معادل کانفیگ hev-socks5-tunnel اندروید
-  (fakeip روی همان رنج `100.64.0.0/10` نقش mapdns).
+- `vpn/tun/MacHelper.kt` — هلپر root (LaunchDaemon، یک‌بار approval) فقط برای toggle سیستم‌پروکسی.

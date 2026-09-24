@@ -72,7 +72,6 @@ fun SettingsScreen(
     var socksBindAddress by remember { mutableStateOf(settingsStore.socksBindAddress) }
     var socksPort by remember { mutableStateOf(settingsStore.socksPort) }
     var proxyOnlyMode by remember { mutableStateOf(settingsStore.proxyOnlyMode) }
-    var macTrafficMode by remember { mutableStateOf(settingsStore.macTrafficMode) }
     var customEdgeAddress by remember { mutableStateOf(settingsStore.customEdgeAddress) }
     var upstreamProxyEnabled by remember { mutableStateOf(settingsStore.upstreamProxyEnabled) }
     var upstreamProxyType by remember { mutableStateOf(settingsStore.upstreamProxyType) }
@@ -90,7 +89,6 @@ fun SettingsScreen(
     var showUpstreamProxyAddressDialog by remember { mutableStateOf(false) }
     var showUpstreamProxyCredentialsDialog by remember { mutableStateOf(false) }
     var showSplitTunnelDialog by remember { mutableStateOf(false) }
-    var showTrafficModeDialog by remember { mutableStateOf(false) }
 
     if (showDohProviderDialog) {
         DohProviderPickerDialog(
@@ -198,19 +196,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showTrafficModeDialog) {
-        TrafficModePickerDialog(
-            current = macTrafficMode,
-            onDismiss = { showTrafficModeDialog = false },
-            onConfirm = {
-                macTrafficMode = it
-                settingsStore.macTrafficMode = it
-                proxyOnlyMode = it == SettingsStore.MacTrafficMode.LOCAL_PROXY
-                showTrafficModeDialog = false
-            },
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -282,18 +267,17 @@ fun SettingsScreen(
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionLabel("Local proxy")
             ListItem(
-                headlineContent = { Text("Traffic capture") },
-                supportingContent = {
-                    Text(
-                        when (macTrafficMode) {
-                            SettingsStore.MacTrafficMode.LOCAL_PROXY -> "Proxy-only mode: local SOCKS5 proxy, no system changes"
-                            SettingsStore.MacTrafficMode.SYSTEM_PROXY -> "System proxy: route the Mac's browser and app traffic through the proxy"
-                            SettingsStore.MacTrafficMode.GLOBAL_TUN -> "Full tunnel: capture all traffic through a TUN interface (needs administrator access)"
+                headlineContent = { Text("Proxy-only mode") },
+                supportingContent = { Text("Run only the local SOCKS5 proxy, without changing the system proxy") },
+                trailingContent = {
+                    Switch(
+                        checked = proxyOnlyMode,
+                        onCheckedChange = {
+                            proxyOnlyMode = it
+                            settingsStore.proxyOnlyMode = it
                         },
                     )
                 },
-                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                modifier = Modifier.clickable { showTrafficModeDialog = true },
             )
             ListItem(
                 headlineContent = { Text("Local address") },
@@ -422,57 +406,6 @@ fun SettingsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun TrafficModePickerDialog(
-    current: SettingsStore.MacTrafficMode,
-    onDismiss: () -> Unit,
-    onConfirm: (SettingsStore.MacTrafficMode) -> Unit,
-) {
-    var selected by remember { mutableStateOf(current) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Traffic capture") },
-        text = {
-            Column {
-                SettingsStore.MacTrafficMode.entries.forEach { mode ->
-                    val (label, detail) = when (mode) {
-                        SettingsStore.MacTrafficMode.LOCAL_PROXY ->
-                            "Proxy-only mode" to "Local SOCKS5 proxy only; point individual apps at it. No system changes."
-                        SettingsStore.MacTrafficMode.SYSTEM_PROXY ->
-                            "System proxy" to "macOS-wide proxy for browsers and apps that honor system settings. Needs administrator approval once."
-                        SettingsStore.MacTrafficMode.GLOBAL_TUN ->
-                            "Full tunnel" to "Captures all traffic (IPv4/IPv6) through a TUN interface, like the Android VPN. Needs administrator approval."
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = selected == mode, onClick = { selected = mode })
-                            .padding(vertical = 4.dp),
-                    ) {
-                        RadioButton(selected = selected == mode, onClick = { selected = mode })
-                        Column(Modifier.padding(start = 8.dp)) {
-                            Text(label)
-                            Text(
-                                detail,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 @Composable

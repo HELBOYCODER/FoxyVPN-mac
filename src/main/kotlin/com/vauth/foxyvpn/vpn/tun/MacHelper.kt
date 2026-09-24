@@ -142,7 +142,7 @@ object MacHelper {
                 "launchctl bootstrap system '$DAEMON_PLIST_PATH'"
         val promptScript =
             "do shell script \"$installCommand\" " +
-                "with prompt \"FoxyVPN needs administrator access once to manage the system proxy. This is the last time it will ask.\" " +
+                "with prompt \"Vulpine VPN needs administrator access once to manage the system proxy. This is the last time it will ask.\" " +
                 "with administrator privileges"
         val result = runCatching {
             ProcessBuilder("osascript", "-e", promptScript)

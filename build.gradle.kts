@@ -53,14 +53,15 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
-            packageName = "FoxyVPN"
-            packageVersion = "1.0.4"
+            packageName = "VulpineVPN"
+            packageVersion = "1.1.0"
             vendor = "vauth"
-            description = "Unofficial Firefox VPN client for macOS"
+            description = "Vulpine VPN - unofficial Firefox VPN client for macOS"
                 macOS {
                 bundleID = "com.vauth.foxyvpn.mac"
                 minimumSystemVersion = "11.0"
-                dockName = "FoxyVPN"
+                iconFile = project.file("icons/VulpineVPN.icns")
+                dockName = "Vulpine VPN"
             }
         }
     }

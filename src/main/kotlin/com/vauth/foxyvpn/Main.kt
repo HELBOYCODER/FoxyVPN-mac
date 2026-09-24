@@ -43,7 +43,7 @@ fun main() {
                 MacHelper.releaseSystem()
                 exitApplication()
             },
-            title = "FoxyVPN",
+            title = "Vulpine VPN",
             state = windowState,
         ) {
             val themeController = rememberThemeController(app.settingsStore)

@@ -110,7 +110,7 @@ fun LogsScreen(onBack: () -> Unit) {
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
                             context.startActivity(
-                                Intent.createChooser(shareIntent, "Save or send FoxyVPN logs").apply {
+                                Intent.createChooser(shareIntent, "Save or send Vulpine VPN logs").apply {
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 },
                             )
@@ -120,7 +120,7 @@ fun LogsScreen(onBack: () -> Unit) {
                     }
                     IconButton(onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("FoxyVPN logs", AppLogger.exportAsText()))
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Vulpine VPN logs", AppLogger.exportAsText()))
                     }) {
                         Icon(Icons.Filled.ContentCopy, contentDescription = "Copy logs")
                     }

@@ -43,7 +43,7 @@ fun LoginScreen(
         Text("Sign in with Firefox", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.padding(top = 8.dp))
         Text(
-            "FoxyVPN runs on the free 50 GB of monthly VPN traffic Mozilla includes with a Firefox account. No subscription is required.",
+            "Vulpine VPN runs on the free 50 GB of monthly VPN traffic Mozilla includes with a Firefox account. No subscription is required.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

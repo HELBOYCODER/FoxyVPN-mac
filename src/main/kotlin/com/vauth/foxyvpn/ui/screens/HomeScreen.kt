@@ -87,7 +87,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("FoxyVPN") },
+                title = { Text("Vulpine VPN") },
                 actions = {
 
                     val mode = themeController.mode

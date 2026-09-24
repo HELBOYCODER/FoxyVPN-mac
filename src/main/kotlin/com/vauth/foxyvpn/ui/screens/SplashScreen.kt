@@ -51,7 +51,7 @@ fun SplashScreen(
                 modifier = Modifier.padding(bottom = 16.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
-            Text("FoxyVPN", fontSize = 28.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text("Vulpine VPN", fontSize = 28.sp, color = MaterialTheme.colorScheme.onSurface)
             CircularProgressIndicator(
                 modifier = Modifier
                     .padding(top = 24.dp)

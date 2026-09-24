@@ -47,6 +47,13 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
+tasks.register<JavaExec>("connectTest") {
+    group = "verification"
+    description = "Headless connect/verify/disconnect against the stored session"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "com.vauth.foxyvpn.tools.ConnectTestKt"
+}
+
 compose.desktop {
     application {
         mainClass = "com.vauth.foxyvpn.MainKt"
@@ -54,7 +61,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "VulpineVPN"
-            packageVersion = "1.1.1"
+            packageVersion = "1.1.2"
             vendor = "vauth"
             description = "Vulpine VPN - unofficial Firefox VPN client for macOS"
                 macOS {

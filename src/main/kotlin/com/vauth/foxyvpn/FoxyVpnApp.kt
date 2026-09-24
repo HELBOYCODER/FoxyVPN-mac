@@ -11,6 +11,9 @@ import com.vauth.foxyvpn.data.TokenStore
 import com.vauth.foxyvpn.platform.AppHolder
 import com.vauth.foxyvpn.vpn.upstream.NettyLoggingBridge
 import org.conscrypt.Conscrypt
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
 import java.security.Security
 
 /**
@@ -30,6 +33,12 @@ class FoxyVpnApp : android.content.Context() {
 
     fun onCreate() {
         AppHolder.context = this
+        // The engine's own control-plane traffic must never follow the macOS system proxy
+        // (which is the app's own SOCKS server while connected) or every request loops.
+        ProxySelector.setDefault(object : ProxySelector() {
+            override fun select(uri: java.net.URI): List<Proxy> = listOf(Proxy.NO_PROXY)
+            override fun connectFailed(uri: java.net.URI, sa: SocketAddress, failure: java.io.IOException) {}
+        })
         CrashReporter.install(this)
         CrashReporter.replayLastCrashIfAny(this)
 

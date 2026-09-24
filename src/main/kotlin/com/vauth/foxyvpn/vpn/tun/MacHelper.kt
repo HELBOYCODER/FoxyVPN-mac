@@ -52,12 +52,10 @@ object MacHelper {
             DIR="${dir.absolutePath}"
 
             active_service() {
-              GW=""
-              PIF=""
-              for i in en0 en1 en2 en3 en4 en5; do
-                R=`ipconfig getrouter ${'$'}i 2>/dev/null`
-                if [ -n "${'$'}R" ]; then GW="${'$'}R"; PIF="${'$'}i"; break; fi
-              done
+              # macOS has no ipconfig getrouter; read the default route from netstat,
+              # preferring a physical en* interface.
+              eval `netstat -rn -f inet | awk '$1=="default" && ${'$'}NF ~ /^en/ {print "GW="${'$'}2"; PIF="${'$'}NF; exit}'`
+              [ -z "${'$'}PIF" ] && eval `netstat -rn -f inet | awk '$1=="default" {print "GW="${'$'}2"; PIF="${'$'}NF; exit}'`
               [ -z "${'$'}PIF" ] && return
               networksetup -listnetworkserviceorder | awk -v ifc="${'$'}PIF" '
                 /^\([0-9]+\)/ { name=${'$'}0; sub(/^[^)]*\) */, "", name) }

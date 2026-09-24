@@ -54,7 +54,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "VulpineVPN"
-            packageVersion = "1.1.0"
+            packageVersion = "1.1.1"
             vendor = "vauth"
             description = "Vulpine VPN - unofficial Firefox VPN client for macOS"
                 macOS {

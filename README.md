@@ -72,8 +72,14 @@ Fastly edge over an HTTP/2 tunnel — the same engine as the Android app
 3. Press the power button.
    - **System proxy** (default): Chrome, Edge, Safari and Firefox traffic
      is routed automatically.
-     - **Windows:** applied through per-user registry settings —
-       **no administrator prompt at all**.
+     - **Windows:** two choices in *Settings → Traffic capture*:
+     - **System proxy** — per-user registry settings, no admin prompt;
+       browsers and WinINet-aware apps go through the VPN.
+     - **Full tunnel** — all system traffic (IPv4/IPv6) is captured by a
+       virtual adapter (sing-box TUN), like a real VPN client. The first
+       connection shows one UAC prompt which registers a scheduled-task
+       helper; every later connect is silent. If the app is killed, the
+       helper tears the tunnel down automatically within 3 minutes.
      - **macOS:** the very first connection asks for administrator access
        once (a tiny LaunchDaemon helper toggles the proxy). It never asks
        again, even after app updates or reinstalls.
@@ -136,8 +142,10 @@ stored session, checks the system proxy and exit IP, then restores).
   the macOS system proxy (admin approval once, then silent).
 - The engine itself always bypasses the system proxy it configures
   (`ProxySelector` pinned to DIRECT), so control-plane traffic never loops.
-- Full-tunnel (TUN) mode was **removed** in v1.0.4-mac3 at user request;
-  the traffic model is proxy-only / system-proxy.
+- Full tunnel (TUN) exists on **Windows only** (`vpn/tun/WindowsTun.kt` +
+  `WindowsTunConfig.kt`); it was removed from macOS in v1.0.4-mac3 at user
+  request. On Windows, bypass host-routes + a fake-DNS bootstrap resolver
+  keep the engine's own edge/control-plane sockets out of the tunnel.
 
 ---
 
@@ -188,8 +196,14 @@ stored session, checks the system proxy and exit IP, then restores).
 3. دکمهٔ اتصال را بزنید:
    - **پروکسی سیستمی** (پیش‌فرض): ترافیک کروم، اج، سافاری و فایرفاکس
      خودکار از تونل رد می‌شود.
-     - **ویندوز:** از طریق تنظیمات رجیستری سطح کاربر اعمال می‌شود —
-       **بدون هیچ پرامپت ادمین**.
+     - **ویندوز:** دو انتخاب در *تنظیمات → Traffic capture*:
+     - **System proxy** — تنظیمات رجیستری سطح کاربر، بدون پرامپت ادمین؛
+       مرورگرها و اپ‌های سازگار با WinINet از VPN رد می‌شوند.
+     - **Full tunnel** — کل ترافیک سیستم (IPv4/IPv6) توسط یک آداپتور
+       مجازی (sing-box TUN) گرفته می‌شود، دقیقاً مثل یک کلاینت VPN واقعی.
+       در اولین اتصال یک بار UAC نشان داده می‌شود (ثبت Scheduled Task);
+       بعد از آن همیشه بی‌صداست. اگر اپ کشته شود، هلپر تا ۳ دقیقه
+       تونل را خودکار جمع می‌کند.
      - **مک:** در اولین اتصال یک بار رمز ادمین خواسته می‌شود (هلپر
        LaunchDaemon)؛ بعد از آن هرگز نمی‌پرسد.
    - **فقط پروکسی** (تنظیمات → Local proxy → Proxy-only mode): بدون هیچ

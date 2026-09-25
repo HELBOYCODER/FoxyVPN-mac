@@ -32,6 +32,15 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Fetch sing-box for the Windows full-tunnel backend
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p vendor
+          curl -sL -o sb.zip "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-windows-amd64.zip"
+          unzip -q sb.zip -d sb
+          cp sb/*/sing-box.exe vendor/sing-box.exe
+
       - name: Package installer
         run: gradle packageDistributionForCurrentOS --no-daemon
 

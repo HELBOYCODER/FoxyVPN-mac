@@ -72,6 +72,8 @@ fun SettingsScreen(
     var socksBindAddress by remember { mutableStateOf(settingsStore.socksBindAddress) }
     var socksPort by remember { mutableStateOf(settingsStore.socksPort) }
     var proxyOnlyMode by remember { mutableStateOf(settingsStore.proxyOnlyMode) }
+    var macTrafficMode by remember { mutableStateOf(settingsStore.macTrafficMode) }
+    var showTrafficModeDialog by remember { mutableStateOf(false) }
     var customEdgeAddress by remember { mutableStateOf(settingsStore.customEdgeAddress) }
     var upstreamProxyEnabled by remember { mutableStateOf(settingsStore.upstreamProxyEnabled) }
     var upstreamProxyType by remember { mutableStateOf(settingsStore.upstreamProxyType) }
@@ -196,6 +198,18 @@ fun SettingsScreen(
         )
     }
 
+    if (showTrafficModeDialog) {
+        TrafficModePickerDialog(
+            current = macTrafficMode,
+            onDismiss = { showTrafficModeDialog = false },
+            onConfirm = {
+                macTrafficMode = it
+                settingsStore.macTrafficMode = it
+                showTrafficModeDialog = false
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -279,6 +293,22 @@ fun SettingsScreen(
                     )
                 },
             )
+            if (com.vauth.foxyvpn.platform.Os.isWindows && !proxyOnlyMode) {
+                ListItem(
+                    headlineContent = { Text("Traffic capture") },
+                    supportingContent = {
+                        Text(
+                            when (macTrafficMode) {
+                                SettingsStore.MacTrafficMode.GLOBAL_TUN ->
+                                    "Full tunnel: all system traffic (IPv4/IPv6) through the VPN"
+                                else -> "System proxy: browsers and apps that honor Windows proxy settings"
+                            },
+                        )
+                    },
+                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                    modifier = Modifier.clickable { showTrafficModeDialog = true },
+                )
+            }
             ListItem(
                 headlineContent = { Text("Local address") },
                 supportingContent = { Text(socksBindAddress) },
@@ -406,6 +436,58 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun TrafficModePickerDialog(
+    current: SettingsStore.MacTrafficMode,
+    onDismiss: () -> Unit,
+    onConfirm: (SettingsStore.MacTrafficMode) -> Unit,
+) {
+    var selected by remember { mutableStateOf(current) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Traffic capture") },
+        text = {
+            Column {
+                listOf(
+                    SettingsStore.MacTrafficMode.SYSTEM_PROXY,
+                    SettingsStore.MacTrafficMode.GLOBAL_TUN,
+                ).forEach { mode ->
+                    val (label, detail) = when (mode) {
+                        SettingsStore.MacTrafficMode.SYSTEM_PROXY ->
+                            "System proxy" to "Browsers and apps that honor Windows proxy settings go through the VPN."
+                        else ->
+                            "Full tunnel" to "All system traffic (IPv4/IPv6) is captured by a virtual adapter, like a real VPN client. Asks for administrator approval once; after that it is silent."
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = selected == mode, onClick = { selected = mode })
+                            .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(selected = selected == mode, onClick = { selected = mode })
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(label)
+                            Text(
+                                detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selected) }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable

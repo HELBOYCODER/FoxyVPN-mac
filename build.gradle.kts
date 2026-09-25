@@ -54,6 +54,16 @@ tasks.register<JavaExec>("connectTest") {
     mainClass = "com.vauth.foxyvpn.tools.ConnectTestKt"
 }
 
+tasks.register<Copy>("syncAppResources") {
+    from("vendor")
+    into("app-resources/windows")
+    filePermissions { unix("755") }
+}
+
+tasks.matching { it.name == "prepareAppResources" || it.name.startsWith("package") || it.name.startsWith("createRuntimeImage") }.configureEach {
+    dependsOn("syncAppResources")
+}
+
 compose.desktop {
     application {
         mainClass = "com.vauth.foxyvpn.MainKt"
@@ -61,9 +71,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Msi)
             packageName = "VulpineVPN"
-            packageVersion = "1.2.0"
+            packageVersion = "1.3.0"
             vendor = "vauth"
             description = "Vulpine VPN - unofficial Firefox VPN client for macOS and Windows"
+            appResourcesRootDir = project.layout.projectDirectory.dir("app-resources")
 
             macOS {
                 bundleID = "com.vauth.foxyvpn.mac"

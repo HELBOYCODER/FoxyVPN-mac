@@ -1,5 +1,5 @@
 .gradle/
 build/
 app-resources/
-vendor/sing-box
+vendor/*
 *.log

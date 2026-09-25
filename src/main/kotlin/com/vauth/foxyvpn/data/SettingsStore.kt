@@ -78,17 +78,23 @@ class SettingsStore(context: Context) {
     enum class MacTrafficMode {
         LOCAL_PROXY,
         SYSTEM_PROXY,
+        GLOBAL_TUN,
     }
 
     var macTrafficMode: MacTrafficMode
         get() {
             val stored = prefs.getString(KEY_MAC_TRAFFIC_MODE, null)
                 ?.let { name -> MacTrafficMode.entries.firstOrNull { it.name == name } }
-            // GLOBAL_TUN was removed; anything unknown falls back to the system proxy.
-            return stored ?: if (prefs.getBoolean(KEY_PROXY_ONLY_MODE, false)) {
+            val mode = stored ?: if (prefs.getBoolean(KEY_PROXY_ONLY_MODE, false)) {
                 MacTrafficMode.LOCAL_PROXY
             } else {
                 MacTrafficMode.SYSTEM_PROXY
+            }
+            // Full tunnel is Windows-only; macOS falls back to the system proxy.
+            return if (mode == MacTrafficMode.GLOBAL_TUN && !com.vauth.foxyvpn.platform.Os.isWindows) {
+                MacTrafficMode.SYSTEM_PROXY
+            } else {
+                mode
             }
         }
         set(value) {

@@ -52,7 +52,7 @@ Fastly edge over an HTTP/2 tunnel — the same engine as the Android app
 
 ### Installation
 1. Download the latest installer from
-   [Releases](https://github.com/HELBOYCODER/VulpineVPN-mac/releases):
+   [Releases](https://github.com/HELBOYCODER/VulpineVPN/releases):
    `VulpineVPN-x.y.z.dmg` (macOS) or `VulpineVPN-x.y.z.exe` (Windows).
 2. **macOS:** open the DMG and drag **Vulpine VPN** to *Applications*.
    **Windows:** run the `.exe` installer (per-user, no admin needed).
@@ -117,7 +117,7 @@ sudo rm /Library/LaunchDaemons/com.vauth.foxyvpn.helper.plist
 
 ### Building from source
 ```bash
-git clone https://github.com/HELBOYCODER/VulpineVPN-mac.git
+git clone https://github.com/HELBOYCODER/VulpineVPN.git
 cd VulpineVPN-mac
 # JDK 17+ and Gradle 8.10 required (no Android SDK needed)
 gradle packageDistributionForCurrentOS
@@ -177,7 +177,7 @@ stored session, checks the system proxy and exit IP, then restores).
   [accounts.firefox.com](https://accounts.firefox.com/signup)
 
 ### نصب
-1. از بخش [Releases](https://github.com/HELBOYCODER/VulpineVPN-mac/releases)
+1. از بخش [Releases](https://github.com/HELBOYCODER/VulpineVPN/releases)
    آخرین نصبی را بگیرید: `VulpineVPN-x.y.z.dmg` (مک) یا `VulpineVPN-x.y.z.exe` (ویندوز).
 2. **مک:** DMG را باز کنید و **Vulpine VPN** را به *Applications* بکشید.
    **ویندوز:** فایل `.exe` را اجرا کنید (نصب در سطح کاربر، بدون ادمین).
@@ -238,7 +238,7 @@ sudo rm /Library/LaunchDaemons/com.vauth.foxyvpn.helper.plist
 
 ### بیلد از سورس
 ```bash
-git clone https://github.com/HELBOYCODER/VulpineVPN-mac.git
+git clone https://github.com/HELBOYCODER/VulpineVPN.git
 cd VulpineVPN-mac
 # فقط JDK 17+ و Gradle 8.10 لازم است (بدون Android SDK)
 gradle packageDistributionForCurrentOS

@@ -1,8 +1,8 @@
 <div align="center">
 
-# Vulpine VPN for macOS 🦊
+# Vulpine VPN for macOS & Windows 🦊
 
-**Unofficial Firefox VPN client for macOS** — a desktop port of
+**Unofficial Firefox VPN client for macOS and Windows** — a desktop port of
 [Vauth/FoxyVPN](https://github.com/Vauth/FoxyVPN) built with Kotlin and
 Compose Multiplatform, keeping the original Material 3 UI pixel-for-pixel.
 
@@ -10,6 +10,7 @@ Compose Multiplatform, keeping the original Material 3 UI pixel-for-pixel.
 Compose Multiplatform و همان رابط Material 3 نسخهٔ اندروید.*
 
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Compose%20Multiplatform-1.9-4285F4?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
@@ -39,19 +40,22 @@ Fastly edge over an HTTP/2 tunnel — the same engine as the Android app
 - Upstream proxy chaining (chain behind another SOCKS5/HTTP proxy)
 - Exit verification, in-app logs, dark/light/system theme
 - Split-tunneling list (macOS app picker)
-- Native `.app` with bundled JRE — **no Java installation needed**
+- Native installers with bundled JRE — **no Java installation needed**
+  (`.dmg` for macOS, `.exe`/`.msi` for Windows)
 - One-time administrator approval for system proxy (survives app restarts
   and upgrades; never asks again)
 
 ### Requirements
-- macOS 11 or newer, **Apple Silicon** (arm64)
+- macOS 11 or newer, **Apple Silicon** (arm64), **or** Windows 10/11 x64
 - A Firefox account — create one free at
   [accounts.firefox.com](https://accounts.firefox.com/signup)
 
 ### Installation
-1. Download the latest `VulpineVPN-x.y.z.dmg` from
-   [Releases](https://github.com/HELBOYCODER/VulpineVPN-mac/releases).
-2. Open the DMG and drag **Vulpine VPN** to *Applications*.
+1. Download the latest installer from
+   [Releases](https://github.com/HELBOYCODER/VulpineVPN-mac/releases):
+   `VulpineVPN-x.y.z.dmg` (macOS) or `VulpineVPN-x.y.z.exe` (Windows).
+2. **macOS:** open the DMG and drag **Vulpine VPN** to *Applications*.
+   **Windows:** run the `.exe` installer (per-user, no admin needed).
 3. The build is **not signed with an Apple Developer ID** (local build).
    On first launch, do one of:
    - Right-click the app → **Open** → **Open**, or
@@ -59,16 +63,20 @@ Fastly edge over an HTTP/2 tunnel — the same engine as the Android app
      ```bash
      xattr -dr com.apple.quarantine /Applications/VulpineVPN.app
      ```
+   - **Windows:** SmartScreen shows *"Windows protected your PC"* for the
+     unsigned build — click **More info → Run anyway**.
 
 ### How to use
 1. Launch **Vulpine VPN** and sign in with your Firefox account.
 2. Pick a location (or keep *Recommended Location*).
 3. Press the power button.
-   - **System proxy** (default): Chrome, Safari and Firefox traffic is
-     routed automatically. On the very first connection macOS asks for
-     administrator access once — this installs a tiny LaunchDaemon helper
-     that toggles the system proxy. It never asks again, even after app
-     updates or reinstalls.
+   - **System proxy** (default): Chrome, Edge, Safari and Firefox traffic
+     is routed automatically.
+     - **Windows:** applied through per-user registry settings —
+       **no administrator prompt at all**.
+     - **macOS:** the very first connection asks for administrator access
+       once (a tiny LaunchDaemon helper toggles the proxy). It never asks
+       again, even after app updates or reinstalls.
    - **Proxy-only mode** (Settings → Local proxy → Proxy-only mode): no
      system changes; point individual apps at `SOCKS5 127.0.0.1:1080`.
 4. Verify: open [ipify.org](https://ipify.org) in the browser — you should
@@ -107,8 +115,12 @@ git clone https://github.com/HELBOYCODER/VulpineVPN-mac.git
 cd VulpineVPN-mac
 # JDK 17+ and Gradle 8.10 required (no Android SDK needed)
 gradle packageDistributionForCurrentOS
-# output: build/compose/binaries/main/dmg/VulpineVPN-<version>.dmg
+# macOS output: build/compose/binaries/main/dmg/*.dmg
+# Windows output: build/compose/binaries/main/exe/*.exe (and msi/)
 ```
+Pushing a `v*` tag triggers the **Build installers** GitHub Actions
+workflow, which compiles both installers on native runners and attaches
+them to the release automatically.
 Headless verification harness: `gradle connectTest` (connects with the
 stored session, checks the system proxy and exit IP, then restores).
 
@@ -152,28 +164,34 @@ stored session, checks the system proxy and exit IP, then restores).
   نمی‌شود
 
 ### پیش‌نیازها
-- macOS 11 یا جدیدتر، **اپل سیلیکون (arm64)**
+- macOS 11 یا جدیدتر (اپل سیلیکون) **یا** ویندوز 10/11 (64-bit)
 - اکانت فایرفاکس — ساخت رایگان در
   [accounts.firefox.com](https://accounts.firefox.com/signup)
 
 ### نصب
 1. از بخش [Releases](https://github.com/HELBOYCODER/VulpineVPN-mac/releases)
-   آخرین فایل `VulpineVPN-x.y.z.dmg` را بگیرید.
-2. DMG را باز کنید و **Vulpine VPN** را به پوشهٔ *Applications* بکشید.
+   آخرین نصبی را بگیرید: `VulpineVPN-x.y.z.dmg` (مک) یا `VulpineVPN-x.y.z.exe` (ویندوز).
+2. **مک:** DMG را باز کنید و **Vulpine VPN** را به *Applications* بکشید.
+   **ویندوز:** فایل `.exe` را اجرا کنید (نصب در سطح کاربر، بدون ادمین).
 3. بیلد با Developer ID اپل **امضا نشده** (ساخت محلی). بار اول یکی از این دو:
    - راست‌کلیک روی اپ → **Open** → دوباره **Open**، یا
    - در ترمینال:
      ```bash
      xattr -dr com.apple.quarantine /Applications/VulpineVPN.app
      ```
+   - **ویندوز:** چون بیلد امضا نشده، SmartScreen پیام *"Windows protected
+     your PC"* می‌دهد — روی **More info → Run anyway** کلیک کنید.
 
 ### طرز استفاده
 1. اپ را باز کنید و با اکانت فایرفاکس وارد شوید.
 2. لوکیشن را انتخاب کنید (یا همان *Recommended Location*).
 3. دکمهٔ اتصال را بزنید:
-   - **پروکسی سیستمی** (پیش‌فرض): ترافیک کروم، سافاری و فایرفاکس خودکار
-     از تونل رد می‌شود. در اولین اتصال، یک بار رمز ادمین خواسته می‌شود تا
-     هلپر سیستمی نصب شود؛ دیگر هرگز نمی‌پرسد.
+   - **پروکسی سیستمی** (پیش‌فرض): ترافیک کروم، اج، سافاری و فایرفاکس
+     خودکار از تونل رد می‌شود.
+     - **ویندوز:** از طریق تنظیمات رجیستری سطح کاربر اعمال می‌شود —
+       **بدون هیچ پرامپت ادمین**.
+     - **مک:** در اولین اتصال یک بار رمز ادمین خواسته می‌شود (هلپر
+       LaunchDaemon)؛ بعد از آن هرگز نمی‌پرسد.
    - **فقط پروکسی** (تنظیمات → Local proxy → Proxy-only mode): بدون هیچ
      تغییری در سیستم؛ اپ‌های موردنظر را به `SOCKS5 127.0.0.1:1080` وصل کنید.
 4. تست: در مرورگر [ipify.org](https://ipify.org) را باز کنید — باید IP

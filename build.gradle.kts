@@ -59,16 +59,23 @@ compose.desktop {
         mainClass = "com.vauth.foxyvpn.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Msi)
             packageName = "VulpineVPN"
-            packageVersion = "1.1.3"
+            packageVersion = "1.2.0"
             vendor = "vauth"
-            description = "Vulpine VPN - unofficial Firefox VPN client for macOS"
-                macOS {
+            description = "Vulpine VPN - unofficial Firefox VPN client for macOS and Windows"
+
+            macOS {
                 bundleID = "com.vauth.foxyvpn.mac"
                 minimumSystemVersion = "11.0"
                 iconFile = project.file("icons/VulpineVPN.icns")
                 dockName = "Vulpine VPN"
+            }
+
+            windows {
+                iconFile = project.file("icons/VulpineVPN.ico")
+                upgradeUuid = "6f1c4d2e-9b3a-4f57-8c1d-2a7e5b0c9f43"
+                menu = true
             }
         }
     }

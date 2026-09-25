@@ -15,6 +15,8 @@ object Platform {
         val attempt = runCatching {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI(url))
+            } else if (Os.isWindows) {
+                ProcessBuilder("cmd", "/c", "start", "", url).start()
             } else {
                 ProcessBuilder("open", url).start()
             }
@@ -29,6 +31,15 @@ object Platform {
     }
 
     fun revealInFinder(file: File) {
+        if (Os.isWindows) {
+            runCatching {
+                ProcessBuilder("explorer", "/select,${file.absolutePath}")
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+            }.onFailure { AppLogger.w(TAG, "could not reveal ${file.absolutePath} in Explorer", it) }
+            return
+        }
         runCatching {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
                 Desktop.getDesktop().open(file.parentFile)

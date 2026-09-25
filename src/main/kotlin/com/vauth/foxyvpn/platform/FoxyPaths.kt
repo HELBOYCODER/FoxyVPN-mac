@@ -14,6 +14,9 @@ object FoxyPaths {
         val override = System.getProperty("foxy.data.dir")
         val dir = if (!override.isNullOrBlank()) {
             File(override)
+        } else if (Os.isWindows) {
+            val appData = System.getenv("APPDATA") ?: "${System.getProperty("user.home")}\\AppData\\Roaming"
+            File(appData, "FoxyVPN")
         } else {
             File(System.getProperty("user.home"), "Library/Application Support/FoxyVPN")
         }

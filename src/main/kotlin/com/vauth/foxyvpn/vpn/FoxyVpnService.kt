@@ -20,7 +20,7 @@ import com.vauth.foxyvpn.data.model.ProxyCandidate
 import com.vauth.foxyvpn.data.model.RuntimeAuth
 import com.vauth.foxyvpn.platform.AppHolder
 import com.vauth.foxyvpn.vpn.socks.LocalSocks5Server
-import com.vauth.foxyvpn.vpn.tun.MacHelper
+import com.vauth.foxyvpn.vpn.tun.SystemProxy
 import com.vauth.foxyvpn.vpn.upstream.EdgeAddressResolver
 import com.vauth.foxyvpn.vpn.upstream.UpstreamProxyConfig
 import com.vauth.foxyvpn.vpn.upstream.UpstreamSession
@@ -420,17 +420,17 @@ object FoxyVpnService {
                     )
                 }
                 SettingsStore.MacTrafficMode.SYSTEM_PROXY -> {
-                    if (MacHelper.startSystemProxy(socksPort)) {
+                    if (SystemProxy.start(socksPort)) {
                         systemProxyActive = true
                         AppLogger.i(TAG, "connect: macOS SOCKS system proxy enabled on 127.0.0.1:$socksPort")
                     } else {
                         AppLogger.w(
                             TAG,
-                            "could not enable the system proxy (administrator access declined); " +
+                            "could not enable the system proxy (needs administrator access on macOS); " +
                                 "falling back to local proxy only",
                         )
                         _lastError.value =
-                            "System proxy needs administrator access. Running local-proxy only " +
+                            "System proxy could not be enabled. Running local-proxy only " +
                             "($socksBindAddress:$socksPort)."
                     }
                 }
@@ -732,7 +732,7 @@ object FoxyVpnService {
         if (resources.isEmpty && !stopSystemTunnel) return
         if (stopSystemTunnel) {
             if (systemProxyActive) {
-                runCatching { MacHelper.stopSystemProxy() }
+                runCatching { SystemProxy.stop() }
                     .onFailure { AppLogger.w(TAG, "error clearing the system proxy", it) }
                 systemProxyActive = false
             }

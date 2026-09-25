@@ -24,7 +24,7 @@ import com.vauth.foxyvpn.ui.navigation.FoxyNavGraph
 import com.vauth.foxyvpn.ui.theme.FoxyVpnTheme
 import com.vauth.foxyvpn.ui.theme.rememberThemeController
 import com.vauth.foxyvpn.vpn.FoxyVpnService
-import com.vauth.foxyvpn.vpn.tun.MacHelper
+import com.vauth.foxyvpn.vpn.tun.SystemProxy
 import android.widget.ToastBus
 import android.widget.ToastMessage
 import kotlinx.coroutines.delay
@@ -40,9 +40,8 @@ fun main() {
                     FoxyVpnService.stop(app)
                     Thread.sleep(1_500)
                 }
-                MacHelper.releaseSystem()
-                exitApplication()
-            },
+                SystemProxy.release()
+                exitApplication()            },
             title = "Vulpine VPN",
             state = windowState,
         ) {
